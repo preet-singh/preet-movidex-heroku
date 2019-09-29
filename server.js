@@ -1,63 +1,67 @@
-require('dotenv').config()
-const express = require('express')
-const morganSetting = process.env.NODE_ENV === 'production' ? 'tiny' ? 'common';
+/* eslint-disable strict */
+require('dotenv').config();
+const express = require('express');
+const morgan = require('morgan');
+const POKEDEX = require('./pokedex.json');
+//const cors = require('cors');
+//const helmet = require('helmet');
 
+const app = express();
 
-
-const app = express()
-
-//middleware
+const morganSetting = process.env.NODE_ENV === 'production' ? 'tiny' : 'common';
 app.use(morgan(morganSetting));
-const SECRET_TOKEN = process.env.API_TOKEN
-const validTypes = [`Bug`, `Dark`, `Dragon`, `Electric`, `Fairy`, `Fighting`, `Fire`, `Flying`, `Ghost`, `Grass`, `Ground`, `Ice`, `Normal`, `Poison`, `Psychic`, `Rock`, `Steel`, `Water`]
+//app.use(helmet());
+//app.use(cors());
 
-//request handler
-function handleGetTypes(req, res) {
-  res.json(validTypes)
-}
+const validTypes = [`Bug`, `Dark`, `Dragon`, `Electric`, `Fairy`, `Fighting`, `Fire`, `Flying`, `Ghost`, `Grass`, `Ground`, `Ice`, `Normal`, `Poison`, `Psychic`, `Rock`, `Steel`, `Water`];
 
-//endpoint request
-app.get('/types', handleGetTypes)
-function handleGetPokemon(req, res) {
-  res.send("Hi, Poke!")
-}
 
-app.get('/pokemon', handleGetPokemon)
-    
-app.use((error, req, res, next) => {
-  let response
-  if (process.env.NODE_ENV === 'production') {
-    response = { error: { message: 'server error' }}
-  } else {
-    response = { error }
+app.use(function validateBearerToken(req,res,next) {
+  const apiToken = process.env.API_TOKEN;
+  const authToken = req.get('Authorization');
+  
+  if(!authToken || authToken.split(' ')[1] !== apiToken) {
+    res.status(401).json({ error: 'Unauthorized request' });
   }
-  res.status(500).json(response)
-})
+  next();
+});
+
+function handleGetTypes(req, res) {
+  res.json(validTypes);
+}
+
+app.get('/types', handleGetTypes);
+
+function handleGetPokemon(req,res) {
+  const { name, type } = req.query;
+  let searchResultsArray = POKEDEX.pokemon;
+
+  if(type) {
+    if(!validTypes.includes(type)) {
+      res.status(400).send('Please enter a valid type');
+    }
+  }
+
+  if(name) {
+    searchResultsArray = POKEDEX.pokemon.filter(pokemon => pokemon.name.toLowerCase().includes(name.toLowerCase()));
+  }
+  if(type) {
+    searchResultsArray = POKEDEX.pokemon.filter(pokemon => pokemon.type.includes(type));
+  }
+  res.send(searchResultsArray);
+}
+
+app.get('/pokemon', handleGetPokemon);
+
+app.use((error,req,res,next) => {
+  let response;
+  if(process.env.NODE_ENV === 'production') {
+    response = { error: {message: 'server error'} };
+  } else {
+    response = { error };
+  }
+  res.status(500).json(response);
+});
 
 const PORT = process.env.PORT || 8000;
-
-app.listen(PORT, () => {
-  (`Server listening at http://localhost:${PORT}`)
-})
-
-
-
-//PM Notes:
-//can create own middleware for auth key:
-
-function requireAuthHeader(req, res, next){
-  const authValue = req.get('Authorization') || ''; //conditional based on having an actual value or empty string for auth values
-  if (!authValue.startsWith('Bearer ')){
-    return res.status(400).json({error: 'Auth not provided'})
-  }
-  const token = authValue.split(' ')[1];
-  if (token !== SECRET_TOKEN){
-    return res.status(401).json({ error: 'invalid credential'})
-  }
-}
-//insert middleware into the pipeline as shown below 
-app.get('./types'. requireAuthHeader, handleGetTypes){
-  //authentication - use bearer secret token, key = autho, value = bearer
-  //can use get method to fetch header out of the headers
-
-}
+app.listen(PORT);
